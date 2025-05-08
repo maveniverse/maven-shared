@@ -18,13 +18,13 @@ import org.slf4j.LoggerFactory;
  * Very basic Mojo support class.
  */
 public abstract class MojoSupport extends AbstractMojo {
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+    protected final Logger logger = LoggerFactory.getLogger(getClass());
 
     @Parameter(defaultValue = "false", property = "skip")
     protected boolean skip;
 
     @Override
-    public final void execute() throws MojoExecutionException, MojoFailureException {
+    public void execute() throws MojoExecutionException, MojoFailureException {
         if (skip) {
             skipMojo();
             return;

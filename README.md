@@ -4,7 +4,7 @@
 
 Requirements:
 * Java 8+
-* Maven 3.6+
+* Maven 3.3+
 
 Some Maven shared and reusable classes.
 

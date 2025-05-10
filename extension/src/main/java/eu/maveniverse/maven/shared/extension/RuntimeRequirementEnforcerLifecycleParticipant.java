@@ -86,7 +86,7 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
             VersionScheme versionScheme = new GenericVersionScheme();
             VersionConstraint mavenConstraint = null;
             if (!OFF.equals(mavenRequirement)) {
-                mavenConstraint = versionScheme.parseVersionConstraint(mavenRequirement);;
+                mavenConstraint = versionScheme.parseVersionConstraint(mavenRequirement);
             }
             VersionConstraint javaConstraint = null;
             if (!OFF.equals(javaRequirement)) {

@@ -48,19 +48,21 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
                 "runtime-requirements.properties");
         if (properties.isPresent()) {
             Map<String, String> p = properties.orElseThrow(() -> new IllegalStateException("No value"));
-            logger.debug("Found runtime-requirements.properties");
+            logger.debug("Found runtime-requirements.properties on classpath");
             String applicationName = p.getOrDefault("applicationName", "Maven extension");
             String mavenRequirement = p.get("mavenRequirement");
             String javaRequirement = p.get("javaRequirement");
             if (mavenRequirement != null && javaRequirement != null) {
                 if (!checkRuntimeRequirements(applicationName, mavenRequirement, javaRequirement)) {
                     throw new MavenExecutionException("Runtime requirements are not fulfilled", (Throwable) null);
+                } else {
+                    logger.debug("Runtime requirements are fulfilled: {}", p);
                 }
             } else {
-                logger.debug("Incomplete runtime-requirements.properties: {}", p);
+                logger.warn("Incomplete runtime-requirements.properties: {}", p);
             }
         } else {
-            logger.debug("Not found runtime-requirements.properties present");
+            logger.debug("Not found runtime-requirements.properties on classpath");
         }
     }
 

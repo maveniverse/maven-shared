@@ -42,8 +42,8 @@ public final class MavenUtils {
         try (InputStream is = classLoader.getResourceAsStream(resourceName)) {
             if (is != null) {
                 props.load(is);
+                return Optional.of(toMap(props));
             }
-            return Optional.of(toMap(props));
         } catch (IOException e) {
             // fall through
         }

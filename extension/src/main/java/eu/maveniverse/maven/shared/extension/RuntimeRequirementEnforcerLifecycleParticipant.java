@@ -52,7 +52,7 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
             String applicationName = p.getOrDefault("applicationName", "Maven extension");
             String mavenRequirement = p.get("mavenRequirement");
             String javaRequirement = p.get("javaRequirement");
-            if (applicationName != null && mavenRequirement != null && javaRequirement != null) {
+            if (mavenRequirement != null && javaRequirement != null) {
                 if (!checkRuntimeRequirements(applicationName, mavenRequirement, javaRequirement)) {
                     throw new MavenExecutionException("Runtime requirements are not fulfilled", (Throwable) null);
                 }

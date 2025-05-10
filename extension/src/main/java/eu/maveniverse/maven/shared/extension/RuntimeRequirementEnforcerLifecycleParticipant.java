@@ -7,9 +7,11 @@
  */
 package eu.maveniverse.maven.shared.extension;
 
-import static java.util.Objects.requireNonNull;
-
 import eu.maveniverse.maven.shared.core.maven.MavenUtils;
+import java.util.Map;
+import java.util.Optional;
+import javax.inject.Named;
+import javax.inject.Singleton;
 import org.apache.maven.AbstractMavenLifecycleParticipant;
 import org.apache.maven.MavenExecutionException;
 import org.apache.maven.execution.MavenSession;
@@ -26,29 +28,43 @@ import org.slf4j.LoggerFactory;
  * This class is intentionally self-contained and compiled with Java 8 to make it able to run on wide range of
  * Maven and Java versions, to report sane error for user why extension refuses to work in their environment.
  * <p>
- * To use this: extend this class, provide required parameters in constructor, and make it a component in maven extension.
+ * To use this: create {@code runtime-requirements.properties} in classpath root of your extension with following
+ * content (mavenRequirement and javaRequirement are ranges):
+ * <pre>
+ *     applicationName=My cool new Maven extension
+ *     mavenRequirement=(3.9,)
+ *     javaRequirement=[8,)
+ * </pre>
  */
-public abstract class RuntimeRequirementEnforcerLifecycleParticipant extends AbstractMavenLifecycleParticipant {
+@Singleton
+@Named
+public final class RuntimeRequirementEnforcerLifecycleParticipant extends AbstractMavenLifecycleParticipant {
     private final Logger logger = LoggerFactory.getLogger(getClass());
-    private final String name;
-    private final String mavenRequirement;
-    private final String javaRequirement;
-
-    protected RuntimeRequirementEnforcerLifecycleParticipant(
-            String name, String mavenRequirement, String javaRequirement) {
-        this.name = requireNonNull(name);
-        this.mavenRequirement = requireNonNull(mavenRequirement);
-        this.javaRequirement = requireNonNull(javaRequirement);
-    }
 
     @Override
     public void afterProjectsRead(MavenSession session) throws MavenExecutionException {
-        if (!checkRuntimeRequirements()) {
-            throw new MavenExecutionException("Runtime requirements are not fulfilled", (Throwable) null);
+        Optional<Map<String, String>> properties = MavenUtils.discoverProperties(
+                RuntimeRequirementEnforcerLifecycleParticipant.class.getClassLoader(),
+                "runtime-requirements.properties");
+        if (properties.isPresent()) {
+            Map<String, String> p = properties.orElseThrow(() -> new IllegalStateException("No value"));
+            logger.debug("Found runtime-requirements.properties");
+            String applicationName = p.getOrDefault("applicationName", "Maven extension");
+            String mavenRequirement = p.get("mavenRequirement");
+            String javaRequirement = p.get("javaRequirement");
+            if (mavenRequirement != null && javaRequirement != null) {
+                if (!checkRuntimeRequirements(applicationName, mavenRequirement, javaRequirement)) {
+                    throw new MavenExecutionException("Runtime requirements are not fulfilled", (Throwable) null);
+                }
+            } else {
+                logger.debug("Incomplete runtime-requirements.properties: {}", p);
+            }
+        } else {
+            logger.debug("Not found runtime-requirements.properties present");
         }
     }
 
-    private boolean checkRuntimeRequirements() {
+    private boolean checkRuntimeRequirements(String name, String mavenRequirement, String javaRequirement) {
         String mavenVersionString = MavenUtils.discoverArtifactVersion(
                 Version.class.getClassLoader(), "org.apache.maven", "maven-core", null);
         String javaVersionString = System.getProperty("java.version");
@@ -76,7 +92,7 @@ public abstract class RuntimeRequirementEnforcerLifecycleParticipant extends Abs
                     logger.warn(String.format(
                             "* Unsupported Java version %s; supported versions are %s", javaVersion, javaConstraint));
                 }
-                logger.error("{} cannot operate in this environment: adapt your environment or remove extension", name);
+                logger.error("{} cannot operate in this environment: adapt your environment for requirements", name);
             }
             return runtimeRequirements;
         } catch (InvalidVersionSpecificationException e) {

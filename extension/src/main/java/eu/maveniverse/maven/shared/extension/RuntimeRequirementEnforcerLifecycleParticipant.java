@@ -19,6 +19,7 @@ import org.eclipse.aether.util.version.GenericVersionScheme;
 import org.eclipse.aether.version.InvalidVersionSpecificationException;
 import org.eclipse.aether.version.Version;
 import org.eclipse.aether.version.VersionConstraint;
+import org.eclipse.aether.version.VersionScheme;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +75,7 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
             throw new IllegalStateException("Maven and/or Java version could not be determined");
         }
         try {
-            GenericVersionScheme versionScheme = new GenericVersionScheme();
+            VersionScheme versionScheme = new GenericVersionScheme();
             VersionConstraint mavenConstraint = versionScheme.parseVersionConstraint(mavenRequirement);
             VersionConstraint javaConstraint = versionScheme.parseVersionConstraint(javaRequirement);
             Version mavenVersion = versionScheme.parseVersion(mavenVersionString);

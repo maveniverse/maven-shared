@@ -36,11 +36,15 @@ import org.slf4j.LoggerFactory;
  *     mavenRequirement=(3.9,)
  *     javaRequirement=[8,)
  * </pre>
+ * Note: if detected Java version is "1.x", the leading "1." is stripped off.
+ * Note: to disable a check use "OFF" (uppercase) as value. All keys must be present to consider property file.
  */
 @Singleton
 @Named
 public final class RuntimeRequirementEnforcerLifecycleParticipant extends AbstractMavenLifecycleParticipant {
     private final Logger logger = LoggerFactory.getLogger(getClass());
+
+    private static final String OFF = "OFF";
 
     @Override
     public void afterProjectsRead(MavenSession session) throws MavenExecutionException {
@@ -75,14 +79,24 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
             throw new IllegalStateException("Maven and/or Java version could not be determined");
         }
         try {
+            // fix for older Java version 1.x
+            if (javaVersionString.startsWith("1.") && javaVersionString.length() > 2) {
+                javaVersionString = javaVersionString.substring(2);
+            }
             VersionScheme versionScheme = new GenericVersionScheme();
-            VersionConstraint mavenConstraint = versionScheme.parseVersionConstraint(mavenRequirement);
-            VersionConstraint javaConstraint = versionScheme.parseVersionConstraint(javaRequirement);
+            VersionConstraint mavenConstraint = null;
+            if (!OFF.equals(mavenRequirement)) {
+                mavenConstraint = versionScheme.parseVersionConstraint(mavenRequirement);
+            }
+            VersionConstraint javaConstraint = null;
+            if (!OFF.equals(javaRequirement)) {
+                javaConstraint = versionScheme.parseVersionConstraint(javaRequirement);
+            }
             Version mavenVersion = versionScheme.parseVersion(mavenVersionString);
             Version javaVersion = versionScheme.parseVersion(javaVersionString);
 
-            boolean mavenOk = mavenConstraint.containsVersion(mavenVersion);
-            boolean javaOk = javaConstraint.containsVersion(javaVersion);
+            boolean mavenOk = mavenConstraint == null || mavenConstraint.containsVersion(mavenVersion);
+            boolean javaOk = javaConstraint == null || javaConstraint.containsVersion(javaVersion);
             boolean runtimeRequirements = mavenOk && javaOk;
             if (!runtimeRequirements) {
                 logger.warn("{} runtime requirements are not fulfilled:", name);

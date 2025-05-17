@@ -28,6 +28,8 @@ public final class DirectoryLocker {
     private final HashMap<Path, FileLock> fileLocks = new HashMap<>();
     private final HashMap<Path, ArrayDeque<Boolean>> references = new HashMap<>();
 
+    private DirectoryLocker() {}
+
     public synchronized void lockDirectory(Path directory, boolean exclusiveAccess) throws IOException {
         requireNonNull(directory, "directory");
 
@@ -60,7 +62,13 @@ public final class DirectoryLocker {
                         throw new UncheckedIOException(e);
                     }
                 });
-                if (lock.isShared() == exclusiveAccess) {
+                if (lock == null || lock.isShared() == exclusiveAccess) {
+                    if (lock != null) {
+                        lock.release();
+                    }
+                    if (acted.get()) {
+                        fileChannels.get(directory).close();
+                    }
                     throw new IOException("Failed to gain " + (exclusiveAccess ? "exclusive" : "shared")
                             + " access to storage: " + directory);
                 }

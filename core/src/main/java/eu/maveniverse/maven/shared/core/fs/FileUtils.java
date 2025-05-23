@@ -17,6 +17,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -119,7 +120,7 @@ public final class FileUtils {
             public void close() throws IOException {
                 if (wantsMove.get()) {
                     if (IS_WINDOWS) {
-                        copy(tempFile, file);
+                        winCopy(tempFile, file);
                     } else {
                         Files.move(tempFile, file, StandardCopyOption.ATOMIC_MOVE);
                     }
@@ -132,7 +133,7 @@ public final class FileUtils {
     /**
      * On Windows we use pre-NIO2 way to copy files, as for some reason it works. Beat me why.
      */
-    private static void copy(Path source, Path target) throws IOException {
+    private static void winCopy(Path source, Path target) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(1024 * 32);
         byte[] array = buffer.array();
         try (InputStream is = Files.newInputStream(source);
@@ -148,16 +149,51 @@ public final class FileUtils {
     }
 
     /**
-     * Performs a hard-linking (if on same volume), otherwise plain copies file contents. Does not check for
-     * any precondition (source exists and is regular file, destination does not exist), it is caller job.
+     * Performs a hard-linking of files (if on same volume), otherwise plain copies file contents. Does not check for
+     * any precondition (source must exist and be a regular file, destination does not exist but parents of it does),
+     * it is caller job.
      */
-    public static void copyOrLink(Path src, Path dest) throws IOException {
-        if (Objects.equals(Files.getFileStore(src), Files.getFileStore(dest.getParent()))) {
-            Files.createLink(dest, src);
+    public static void copyOrLink(Path src, Path dst, boolean mayLink) throws IOException {
+        if (mayLink && mayLink(src, dst)) {
+            link(src, dst);
         } else {
-            Files.copy(src, dest);
-            Files.setLastModifiedTime(dest, Files.getLastModifiedTime(src));
+            copy(src, dst);
         }
+    }
+
+    /**
+     * Extended check should caller link or not. Both path must point to files, and {@code src} must exist while
+     * {@code dst} parents must as well. Checks:
+     * <ul>
+     *     <li>Java FileStore equality check (unreliable; Java on Fedora42 says true for different volumes coming from same btrfs pool</li>
+     *     <li>both path below $HOME: we assume user home is on single volume</li>
+     * </ul>
+     */
+    public static boolean mayLink(Path src, Path dst) throws IOException {
+        // same store; unreliable, as on Fedora says true for two different volumes on same BTRFS pool
+        if (!Objects.equals(Files.getFileStore(src), Files.getFileStore(dst.getParent()))) {
+            return false;
+        }
+        // both paths below user home: let's assume user home is on one volume
+        Path userHome = Paths.get(System.getProperty("user.home"));
+        return src.startsWith(userHome) || !dst.startsWith(userHome);
+    }
+
+    /**
+     * Performs a hard-linking of files. Does not check for any precondition (source exists and is regular file,
+     * destination does not exist but parents do), it is caller job.
+     */
+    public static void link(Path src, Path dst) throws IOException {
+        Files.createLink(dst, src);
+    }
+
+    /**
+     * Performs plain copy of file contents and sets last modified of new file. Does not check for
+     * any precondition (source exists and is regular file, destination does not exist but parents do), it is caller job.
+     */
+    public static void copy(Path src, Path dst) throws IOException {
+        Files.copy(src, dst);
+        Files.setLastModifiedTime(dst, Files.getLastModifiedTime(src));
     }
 
     /**

@@ -36,7 +36,8 @@ public final class FileUtils {
     }
 
     /**
-     * Returns "canonical" (real) path of some "base" directory. Allows override via Java System properties.
+     * Returns "canonical" (real) path of some "base" directory. Allows override via Java System properties. If
+     * property was set, the value is resolved against CWD, otherwise default is resolved against user HOME.
      *
      * @param basedirKey The Java System Property key to look for basedir value (and use it if set).
      * @param defBasedir The default value of basedir if Java System Property is not set.
@@ -48,9 +49,22 @@ public final class FileUtils {
         requireNonNull(defBasedir, "defBasedir");
         String basedir = System.getProperty(basedirKey);
         if (basedir == null) {
-            basedir = defBasedir;
+            return canonicalPath(discoverUserHomeDirectory().resolve(defBasedir));
         }
-        return canonicalPath(discoverUserHomeDirectory().resolve(basedir));
+        return canonicalPath(discoverUserCurrentWorkingDirectory().resolve(basedir));
+    }
+
+    /**
+     * Returns "canonical" (real) path of user current working directory as discovered from Java system properties.
+     *
+     * @since 0.1.8
+     */
+    public static Path discoverUserCurrentWorkingDirectory() {
+        String userHome = System.getProperty("user.dir");
+        if (userHome == null) {
+            throw new IllegalStateException("requires user.dir Java System Property set");
+        }
+        return canonicalPath(Paths.get(userHome));
     }
 
     /**

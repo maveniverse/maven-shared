@@ -36,6 +36,53 @@ public final class FileUtils {
     }
 
     /**
+     * Returns "canonical" (real) path of some "base" directory. Allows override via Java System properties.
+     *
+     * @param basedirKey The Java System Property key to look for basedir value (and use it if set).
+     * @param defBasedir The default value of basedir if Java System Property is not set.
+     * @return The canonical path of "base" directory. It is resolved from user home and canonicalized.
+     * @since 0.1.7
+     */
+    public static Path discoverBaseDirectory(String basedirKey, String defBasedir) {
+        requireNonNull(basedirKey, "basedirKey");
+        requireNonNull(defBasedir, "defBasedir");
+        String basedir = System.getProperty(basedirKey);
+        if (basedir == null) {
+            basedir = defBasedir;
+        }
+        return canonicalPath(discoverUserHomeDirectory().resolve(basedir));
+    }
+
+    /**
+     * Returns "canonical" (real) path of user home as discovered from Java system properties.
+     *
+     * @since 0.1.7
+     */
+    public static Path discoverUserHomeDirectory() {
+        String userHome = System.getProperty("user.home");
+        if (userHome == null) {
+            throw new IllegalStateException("requires user.home Java System Property set");
+        }
+        return canonicalPath(Paths.get(userHome));
+    }
+
+    /**
+     * Returns "canonical" (real) path of passed in non-null path.
+     *
+     * @param path The path to canonicalize, must not be null.
+     * @return The canonicalized path.
+     * @since 0.1.7
+     */
+    public static Path canonicalPath(Path path) {
+        requireNonNull(path, "path");
+        try {
+            return path.toRealPath();
+        } catch (IOException e) {
+            return canonicalPath(path.getParent()).resolve(path.getFileName());
+        }
+    }
+
+    /**
      * A temporary file, that is removed when closed.
      */
     public interface TempFile extends Closeable {

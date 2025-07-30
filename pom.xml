@@ -14,7 +14,7 @@
   <parent>
     <groupId>eu.maveniverse.maven.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>40</version>
+    <version>41</version>
   </parent>
 
   <groupId>eu.maveniverse.maven.shared</groupId>
@@ -68,8 +68,8 @@
     <requireRuntimeMavenVersion.range>[3.9.9,)</requireRuntimeMavenVersion.range>
 
     <!-- Dependency versions -->
-    <version.maven>3.9.10</version.maven>
-    <version.resolver>1.9.23</version.resolver>
+    <version.maven>3.9.11</version.maven>
+    <version.resolver>1.9.24</version.resolver>
     <version.slf4j>1.7.36</version.slf4j>
   </properties>
 
@@ -153,7 +153,7 @@
       <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-api</artifactId>
-        <version>5.13.3</version>
+        <version>5.13.4</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

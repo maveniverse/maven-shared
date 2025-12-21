@@ -7,10 +7,14 @@
  */
 package eu.maveniverse.maven.shared.plugin;
 
+import javax.inject.Inject;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.eclipse.aether.util.ConfigUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,12 +24,22 @@ import org.slf4j.LoggerFactory;
 public abstract class MojoSupport extends AbstractMojo {
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
-    @Parameter(defaultValue = "false", property = "skip")
+    @Inject
+    protected MavenSession mavenSession;
+
+    @Parameter(defaultValue = "${mojo}", readonly = true, required = true)
+    protected MojoExecution mojoExecution;
+
+    /**
+     * Plugin configuration to skip the Mojo. The Mojo can also be skipped by user property {@code $mojoName.skip}
+     * or {@code $prefix.$mojoName.skip} as well (check specific Mojo).
+     */
+    @Parameter(defaultValue = "false")
     protected boolean skip;
 
     @Override
-    public void execute() throws MojoExecutionException, MojoFailureException {
-        if (skip) {
+    public final void execute() throws MojoExecutionException, MojoFailureException {
+        if (isSkipped()) {
             skipMojo();
             return;
         }
@@ -33,9 +47,37 @@ public abstract class MojoSupport extends AbstractMojo {
         executeMojo();
     }
 
-    protected abstract void executeMojo() throws MojoExecutionException, MojoFailureException;
-
-    protected void skipMojo() throws MojoExecutionException, MojoFailureException {
-        logger.info("Skipped");
+    protected boolean isSkipped() {
+        if (skip) {
+            return true;
+        }
+        return ConfigUtils.getBoolean(mavenSession.getRepositorySession(), false, skipKeyNames());
     }
+
+    /**
+     * Override if custom message needed.
+     */
+    protected void skipMojo() throws MojoExecutionException, MojoFailureException {
+        logger.info("Mojo '{}' skipped per user request.", mojoExecution.getGoal());
+    }
+
+    /**
+     * Override if skipping requires observing more keys.
+     */
+    protected String[] skipKeyNames() {
+        return new String[] {skipPrefix() + mojoExecution.getGoal() + ".skip"};
+    }
+
+    /**
+     * Override if needed. If overridden, the returned string should ideally end with a dot.
+     * Must not return {@code null}.
+     */
+    protected String skipPrefix() {
+        return "";
+    }
+
+    /**
+     * Implementation of this Mojo.
+     */
+    protected abstract void executeMojo() throws MojoExecutionException, MojoFailureException;
 }

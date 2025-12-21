@@ -31,7 +31,8 @@ public abstract class MojoSupport extends AbstractMojo {
     protected MojoExecution mojoExecution;
 
     /**
-     * Plugin configuration to skip the Mojo. Each Mojo can also be skipped by user property {@code njord.$mojoName.skip} as well.
+     * Plugin configuration to skip the Mojo. The Mojo can also be skipped by user property {@code $mojoName.skip}
+     * or {@code $prefix.$mojoName.skip} as well (check specific Mojo).
      */
     @Parameter(defaultValue = "false")
     protected boolean skip;

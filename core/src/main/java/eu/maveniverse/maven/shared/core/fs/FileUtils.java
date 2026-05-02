@@ -36,22 +36,76 @@ public final class FileUtils {
     }
 
     /**
-     * Returns "canonical" (real) path of some "base" directory. Allows override via Java System properties. If
-     * property was set, the value is resolved against CWD, otherwise default is resolved against user HOME.
+     * Returns path of some directory set as Java System Property.
+     * If property was set, the value is returned as path, otherwise default value, if given, is returned as
+     * path. If not set nor default value was given, property is considered mandatory and exception is thrown.
      *
-     * @param basedirKey The Java System Property key to look for basedir value (and use it if set).
-     * @param defBasedir The default value of basedir if Java System Property is not set.
-     * @return The canonical path of "base" directory. It is resolved from user home and canonicalized.
-     * @since 0.1.7
+     * @param key The Java System Property key to look for value (and use it if set).
+     * @param defValue The default value to use if Java System Property is not set, may be {@code null},
+     *                 in which case property is considered mandatory.
+     * @return The path discovered, as is.
+     * @since 0.1.12
      */
-    public static Path discoverBaseDirectory(String basedirKey, String defBasedir) {
-        requireNonNull(basedirKey, "basedirKey");
-        requireNonNull(defBasedir, "defBasedir");
-        String basedir = System.getProperty(basedirKey);
-        if (basedir == null) {
-            return canonicalPath(discoverUserHomeDirectory().resolve(defBasedir));
+    public static Path discoverPathFromSystemProperty(String key, String defValue) {
+        requireNonNull(key, "key");
+        String dir = System.getProperty(key);
+        if (dir == null) {
+            if (defValue == null) {
+                throw new IllegalStateException("Mandatory property " + key + " is not set");
+            }
+            return Paths.get(defValue);
         }
-        return canonicalPath(discoverUserCurrentWorkingDirectory().resolve(basedir));
+        return Paths.get(dir);
+    }
+
+    /**
+     * Returns "canonical" (real) path of some directory set as Java System Property.
+     * If property was set, the value is resolved against CWD, otherwise default value, if given, is resolved
+     * against user $HOME. Finally, if default value was not set, and property was not set either,
+     * exception is thrown.
+     *
+     * @param key The Java System Property key to look for value (and use it if set).
+     * @param defValue The default value of basedir if Java System Property is not set, may be {@code null},
+     *                 in which case property is considered mandatory.
+     * @return The canonical path of directory. It is resolved from CWD and canonicalized if set, or is
+     * resolved from HOME if property was not set, but default value was provided.
+     * @since 0.1.12
+     */
+    public static Path discoverCanonicalDirectoryFromSystemProperty(String key, String defValue) {
+        requireNonNull(key, "key");
+        String dir = System.getProperty(key);
+        if (dir == null) {
+            if (defValue == null) {
+                throw new IllegalStateException("Mandatory property " + key + " is not set");
+            }
+            return canonicalPath(discoverUserHomeDirectory().resolve(defValue));
+        }
+        return canonicalPath(discoverUserCurrentWorkingDirectory().resolve(dir));
+    }
+
+    /**
+     * Returns "normalized" (abs+normalized) path of some directory set as Java System Property.
+     * If property was set, the value is resolved against CWD, otherwise default value, if given, is resolved
+     * against user $HOME. Finally, if default value was not set, and property was not set either,
+     * exception is thrown.
+     *
+     * @param key The Java System Property key to look for value (and use it if set).
+     * @param defValue The default value of basedir if Java System Property is not set, may be {@code null},
+     *                 in which case property is considered mandatory.
+     * @return The canonical path of directory. It is resolved from CWD and canonicalized if set, or is
+     * resolved from HOME if property was not set, but default value was provided.
+     * @since 0.1.12
+     */
+    public static Path discoverNormalizedDirectoryFromSystemProperty(String key, String defValue) {
+        requireNonNull(key, "key");
+        String dir = System.getProperty(key);
+        if (dir == null) {
+            if (defValue == null) {
+                throw new IllegalStateException("Mandatory property " + key + " is not set");
+            }
+            return normalizePath(discoverUserHomeDirectory().resolve(defValue));
+        }
+        return normalizePath(discoverUserCurrentWorkingDirectory().resolve(dir));
     }
 
     /**
@@ -60,11 +114,7 @@ public final class FileUtils {
      * @since 0.1.8
      */
     public static Path discoverUserCurrentWorkingDirectory() {
-        String userHome = System.getProperty("user.dir");
-        if (userHome == null) {
-            throw new IllegalStateException("requires user.dir Java System Property set");
-        }
-        return canonicalPath(Paths.get(userHome));
+        return discoverCanonicalDirectoryFromSystemProperty("user.dir", null);
     }
 
     /**
@@ -73,11 +123,7 @@ public final class FileUtils {
      * @since 0.1.7
      */
     public static Path discoverUserHomeDirectory() {
-        String userHome = System.getProperty("user.home");
-        if (userHome == null) {
-            throw new IllegalStateException("requires user.home Java System Property set");
-        }
-        return canonicalPath(Paths.get(userHome));
+        return discoverCanonicalDirectoryFromSystemProperty("user.home", null);
     }
 
     /**
@@ -94,6 +140,18 @@ public final class FileUtils {
         } catch (IOException e) {
             return canonicalPath(path.getParent()).resolve(path.getFileName());
         }
+    }
+
+    /**
+     * Returns "normalized" (absolute and normalized) path of passed in non-null path.
+     *
+     * @param path The path to normalize, must not be null.
+     * @return The normalized path.
+     * @since 0.1.12
+     */
+    public static Path normalizePath(Path path) {
+        requireNonNull(path, "path");
+        return path.toAbsolutePath().normalize();
     }
 
     /**
@@ -133,7 +191,22 @@ public final class FileUtils {
      * the temporary file on file system.
      */
     public static TempFile newTempFile() throws IOException {
-        Path tempFile = Files.createTempFile("resolver", "tmp");
+        return newTempFile(normalizePath(Paths.get(System.getProperty("java.io.tmpdir"))));
+    }
+
+    /**
+     * Creates a {@link TempFile} instance and backing temporary file on file system. It will be located in the default
+     * temporary-file directory. Returned instance should be handled in try-with-resource construct and created
+     * temp file is removed (if exists) when returned instance is closed.
+     * <p>
+     * This method uses {@link Files#createTempFile(Path, String, String, java.nio.file.attribute.FileAttribute[])} to create
+     * the temporary file on file system.
+     *
+     * @since 0.1.12
+     */
+    public static TempFile newTempFile(Path tempDirectory) throws IOException {
+        Files.createDirectories(tempDirectory);
+        Path tempFile = Files.createTempFile(tempDirectory, "resolver", "tmp");
         return new TempFile() {
             @Override
             public Path getPath() {
@@ -159,7 +232,7 @@ public final class FileUtils {
      * This method uses {@link Path#resolve(String)} to create the temporary file path in passed in file parent
      * directory, but it does NOT create backing file on file system.
      */
-    public static CollocatedTempFile newTempFile(Path file) throws IOException {
+    public static CollocatedTempFile newCollocatedTempFile(Path file) throws IOException {
         Path parent = requireNonNull(file.getParent(), "file must have parent");
         Files.createDirectories(parent);
         Path tempFile = parent.resolve(file.getFileName() + "."
@@ -357,7 +430,7 @@ public final class FileUtils {
         requireNonNull(writer, "writer is null");
         Path parent = requireNonNull(target.getParent(), "target must have parent");
 
-        try (CollocatedTempFile tempFile = newTempFile(target)) {
+        try (CollocatedTempFile tempFile = newCollocatedTempFile(target)) {
             writer.write(tempFile.getPath());
             if (doBackup && Files.isRegularFile(target)) {
                 Files.copy(target, parent.resolve(target.getFileName() + ".bak"), StandardCopyOption.REPLACE_EXISTING);

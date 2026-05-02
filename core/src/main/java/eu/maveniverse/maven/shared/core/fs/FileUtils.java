@@ -44,7 +44,7 @@ public final class FileUtils {
      * @param defValue The default value to use if Java System Property is not set, may be {@code null},
      *                 in which case property is considered mandatory.
      * @return The path discovered, as is.
-     * @since 0.1.12
+     * @since 0.2.0
      */
     public static Path discoverPathFromSystemProperty(String key, String defValue) {
         requireNonNull(key, "key");
@@ -69,7 +69,7 @@ public final class FileUtils {
      *                 in which case property is considered mandatory.
      * @return The canonical path of directory. It is resolved from CWD and canonicalized if set, or is
      * resolved from HOME if property was not set, but default value was provided.
-     * @since 0.1.12
+     * @since 0.2.0
      */
     public static Path discoverCanonicalDirectoryFromSystemProperty(String key, String defValue) {
         requireNonNull(key, "key");
@@ -94,7 +94,7 @@ public final class FileUtils {
      *                 in which case property is considered mandatory.
      * @return The canonical path of directory. It is resolved from CWD and canonicalized if set, or is
      * resolved from HOME if property was not set, but default value was provided.
-     * @since 0.1.12
+     * @since 0.2.0
      */
     public static Path discoverNormalizedDirectoryFromSystemProperty(String key, String defValue) {
         requireNonNull(key, "key");
@@ -147,7 +147,7 @@ public final class FileUtils {
      *
      * @param path The path to normalize, must not be null.
      * @return The normalized path.
-     * @since 0.1.12
+     * @since 0.2.0
      */
     public static Path normalizePath(Path path) {
         requireNonNull(path, "path");
@@ -202,11 +202,25 @@ public final class FileUtils {
      * This method uses {@link Files#createTempFile(Path, String, String, java.nio.file.attribute.FileAttribute[])} to create
      * the temporary file on file system.
      *
-     * @since 0.1.12
+     * @since 0.2.0
      */
     public static TempFile newTempFile(Path tempDirectory) throws IOException {
+        return newTempFile(tempDirectory, null);
+    }
+
+    /**
+     * Creates a {@link TempFile} instance and backing temporary file on file system. It will be located in the default
+     * temporary-file directory. Returned instance should be handled in try-with-resource construct and created
+     * temp file is removed (if exists) when returned instance is closed.
+     * <p>
+     * This method uses {@link Files#createTempFile(Path, String, String, java.nio.file.attribute.FileAttribute[])} to create
+     * the temporary file on file system.
+     *
+     * @since 0.2.2
+     */
+    public static TempFile newTempFile(Path tempDirectory, String suffix) throws IOException {
         Files.createDirectories(tempDirectory);
-        Path tempFile = Files.createTempFile(tempDirectory, "resolver", "tmp");
+        Path tempFile = Files.createTempFile(tempDirectory, "resolver", suffix);
         return new TempFile() {
             @Override
             public Path getPath() {

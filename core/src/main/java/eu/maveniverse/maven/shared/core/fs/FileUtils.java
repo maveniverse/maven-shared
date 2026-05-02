@@ -114,7 +114,7 @@ public final class FileUtils {
      * @since 0.1.8
      */
     public static Path discoverUserCurrentWorkingDirectory() {
-        return discoverCanonicalDirectoryFromSystemProperty("user.dir", null);
+        return canonicalPath(Paths.get(System.getProperty("user.dir")));
     }
 
     /**
@@ -123,7 +123,7 @@ public final class FileUtils {
      * @since 0.1.7
      */
     public static Path discoverUserHomeDirectory() {
-        return discoverCanonicalDirectoryFromSystemProperty("user.home", null);
+        return canonicalPath(Paths.get(System.getProperty("user.home")));
     }
 
     /**

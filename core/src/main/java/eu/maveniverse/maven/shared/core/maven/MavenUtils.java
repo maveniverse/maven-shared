@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 public final class MavenUtils {
@@ -55,16 +56,25 @@ public final class MavenUtils {
      */
     public static String discoverArtifactVersion(
             ClassLoader classLoader, String groupId, String artifactId, String defVersion) {
+        return discoverArtifactVersionWithPostOperator(
+                classLoader, groupId, artifactId, s -> Optional.ofNullable(s).orElse(defVersion));
+    }
+
+    /**
+     * Discovers artifact version and applies "post" unary operator.
+     *
+     * @since 0.2.3
+     */
+    public static String discoverArtifactVersionWithPostOperator(
+            ClassLoader classLoader, String groupId, String artifactId, UnaryOperator<String> post) {
         String version = discoverProperties(
                         classLoader, "META-INF/maven/" + groupId + "/" + artifactId + "/pom.properties")
                 .orElseGet(Collections::emptyMap)
-                .getOrDefault("version", defVersion);
-        if (version != null) {
-            version = version.trim();
-            if (version.startsWith("${")) {
-                version = defVersion;
-            }
+                .get("version");
+        if (post != null) {
+            return post.apply(version);
+        } else {
+            return version;
         }
-        return version;
     }
 }

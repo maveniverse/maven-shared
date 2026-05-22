@@ -10,4 +10,7 @@ module eu.maveniverse.maven.shared.core {
     exports eu.maveniverse.maven.shared.core.component;
     exports eu.maveniverse.maven.shared.core.fs;
     exports eu.maveniverse.maven.shared.core.maven;
+
+    requires java.base;
+    requires static org.slf4j;
 }

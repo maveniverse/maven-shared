@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Maveniverse Org.
+ * Copyright (c) 2023-2026 Maveniverse Org.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
@@ -92,7 +92,7 @@ public final class FileUtils {
      * @param key The Java System Property key to look for value (and use it if set).
      * @param defValue The default value of basedir if Java System Property is not set, may be {@code null},
      *                 in which case property is considered mandatory.
-     * @return The canonical path of directory. It is resolved from CWD and canonicalized if set, or is
+     * @return The normalized path of directory. It is resolved from CWD and normalized if set, or is
      * resolved from HOME if property was not set, but default value was provided.
      * @since 0.2.0
      */
@@ -138,7 +138,12 @@ public final class FileUtils {
         try {
             return path.toRealPath();
         } catch (IOException e) {
-            return canonicalPath(path.getParent()).resolve(path.getFileName());
+            Path absolute = path.toAbsolutePath();
+            Path parent = absolute.getParent();
+            if (parent == null) {
+                return absolute;
+            }
+            return canonicalPath(parent).resolve(absolute.getFileName());
         }
     }
 
@@ -170,6 +175,7 @@ public final class FileUtils {
     public interface CollocatedTempFile extends TempFile {
         /**
          * Upon close, atomically moves temp file to target file it is collocated with overwriting target (if exists).
+         * Note: on Windows the move is not atomic, the temp file contents are copied over the target file.
          * Invocation of this method merely signals that caller ultimately wants temp file to replace the target
          * file, but when this method returns, the move operation did not yet happen, it will happen when this
          * instance is closed.
@@ -220,7 +226,7 @@ public final class FileUtils {
      */
     public static TempFile newTempFile(Path tempDirectory, String suffix) throws IOException {
         Files.createDirectories(tempDirectory);
-        Path tempFile = Files.createTempFile(tempDirectory, "resolver", suffix);
+        Path tempFile = Files.createTempFile(tempDirectory, "mvnvrs", suffix);
         return new TempFile() {
             @Override
             public Path getPath() {
@@ -266,14 +272,17 @@ public final class FileUtils {
 
             @Override
             public void close() throws IOException {
-                if (wantsMove.get()) {
-                    if (IS_WINDOWS) {
-                        winCopy(tempFile, file);
-                    } else {
-                        Files.move(tempFile, file, StandardCopyOption.ATOMIC_MOVE);
+                try {
+                    if (wantsMove.get()) {
+                        if (IS_WINDOWS) {
+                            winCopy(tempFile, file);
+                        } else {
+                            Files.move(tempFile, file, StandardCopyOption.ATOMIC_MOVE);
+                        }
                     }
+                } finally {
+                    Files.deleteIfExists(tempFile);
                 }
-                Files.deleteIfExists(tempFile);
             }
         };
     }
@@ -314,17 +323,20 @@ public final class FileUtils {
      * {@code dst} parents must as well. Checks:
      * <ul>
      *     <li>Java FileStore equality check (unreliable; Java on Fedora42 says true for different volumes coming from same btrfs pool</li>
-     *     <li>both path below $HOME: we assume user home is on single volume</li>
+     *     <li>both path below $HOME or both outside of it: we assume user home is on single volume, and that
+     *     paths on different sides of $HOME are on different volumes</li>
      * </ul>
      */
     public static boolean mayLink(Path src, Path dst) throws IOException {
+        src = canonicalPath(src);
+        dst = canonicalPath(dst);
         // same store; unreliable, as on Fedora says true for two different volumes on same BTRFS pool
         if (!Objects.equals(Files.getFileStore(src), Files.getFileStore(dst.getParent()))) {
             return false;
         }
-        // both paths below user home: let's assume user home is on one volume
-        Path userHome = Paths.get(System.getProperty("user.home"));
-        return src.startsWith(userHome) || !dst.startsWith(userHome);
+        // paths on same side of user home: let's assume user home is on one volume
+        Path userHome = discoverUserHomeDirectory();
+        return src.startsWith(userHome) == dst.startsWith(userHome);
     }
 
     /**
@@ -384,6 +396,9 @@ public final class FileUtils {
         Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                if (exc != null) {
+                    throw exc;
+                }
                 Files.delete(dir);
                 return FileVisitResult.CONTINUE;
             }
@@ -430,7 +445,8 @@ public final class FileUtils {
 
     /**
      * Utility method to write out file to disk in "atomic" manner, with optional backups (".bak") if needed. This
-     * ensures that no other thread or process will be able to read not fully written files. Finally, this methos
+     * ensures that no other thread or process will be able to read not fully written files (except on Windows,
+     * see {@link CollocatedTempFile#move()}). Finally, this method
      * may create the needed parent directories, if the passed in target parents does not exist.
      *
      * @param target   that is the target file (must be an existing or non-existing file, the path must have parent).

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Maveniverse Org.
+ * Copyright (c) 2023-2026 Maveniverse Org.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
@@ -10,11 +10,13 @@ package eu.maveniverse.maven.shared.extension;
 import eu.maveniverse.maven.shared.core.maven.MavenUtils;
 import java.util.Map;
 import java.util.Optional;
+import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
 import org.apache.maven.AbstractMavenLifecycleParticipant;
 import org.apache.maven.MavenExecutionException;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.rtinfo.RuntimeInformation;
 import org.eclipse.aether.util.version.GenericVersionScheme;
 import org.eclipse.aether.version.InvalidVersionSpecificationException;
 import org.eclipse.aether.version.Version;
@@ -36,8 +38,9 @@ import org.slf4j.LoggerFactory;
  *     mavenRequirement=(3.9,)
  *     javaRequirement=[8,)
  * </pre>
- * Note: if detected Java version is "1.x", the leading "1." is stripped off.
- * Note: to disable a check use "OFF" (uppercase) as value. All keys must be present to consider property file.
+ * Note: if detected Java version is "1.x", the leading "1." is stripped off, and any qualifier (like "-ea") is ignored.
+ * Note: to disable a check use "OFF" (uppercase) as value. The {@code applicationName} is optional, but both
+ * requirement keys must be present to consider property file.
  */
 @Singleton
 @Named
@@ -46,13 +49,20 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
 
     private static final String OFF = "OFF";
 
+    private final RuntimeInformation runtimeInformation;
+
+    @Inject
+    public RuntimeRequirementEnforcerLifecycleParticipant(RuntimeInformation runtimeInformation) {
+        this.runtimeInformation = runtimeInformation;
+    }
+
     @Override
     public void afterProjectsRead(MavenSession session) throws MavenExecutionException {
         Optional<Map<String, String>> properties = MavenUtils.discoverProperties(
                 RuntimeRequirementEnforcerLifecycleParticipant.class.getClassLoader(),
                 "runtime-requirements.properties");
         if (properties.isPresent()) {
-            Map<String, String> p = properties.orElseThrow(() -> new IllegalStateException("No value"));
+            Map<String, String> p = properties.get();
             logger.debug("Found runtime-requirements.properties on classpath");
             String applicationName = p.getOrDefault("applicationName", "Maven extension");
             String mavenRequirement = p.get("mavenRequirement");
@@ -71,18 +81,15 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
         }
     }
 
-    private boolean checkRuntimeRequirements(String name, String mavenRequirement, String javaRequirement) {
-        String mavenVersionString = MavenUtils.discoverArtifactVersion(
-                Version.class.getClassLoader(), "org.apache.maven", "maven-core", null);
+    private boolean checkRuntimeRequirements(String name, String mavenRequirement, String javaRequirement)
+            throws MavenExecutionException {
+        String mavenVersionString = runtimeInformation.getMavenVersion();
         String javaVersionString = System.getProperty("java.version");
         if (mavenVersionString == null || javaVersionString == null) {
-            throw new IllegalStateException("Maven and/or Java version could not be determined");
+            throw new MavenExecutionException("Maven and/or Java version could not be determined", (Throwable) null);
         }
         try {
-            // fix for older Java version 1.x
-            if (javaVersionString.startsWith("1.") && javaVersionString.length() > 2) {
-                javaVersionString = javaVersionString.substring(2);
-            }
+            javaVersionString = normalizeJavaVersion(javaVersionString);
             VersionScheme versionScheme = new GenericVersionScheme();
             VersionConstraint mavenConstraint = null;
             if (!OFF.equals(mavenRequirement)) {
@@ -113,7 +120,20 @@ public final class RuntimeRequirementEnforcerLifecycleParticipant extends Abstra
             }
             return runtimeRequirements;
         } catch (InvalidVersionSpecificationException e) {
-            throw new IllegalStateException("Maven and/or Java version could not be parsed", e);
+            throw new MavenExecutionException("Maven and/or Java version could not be parsed", e);
         }
+    }
+
+    static String normalizeJavaVersion(String javaVersion) {
+        // fix for older Java version 1.x
+        if (javaVersion.startsWith("1.") && javaVersion.length() > 2) {
+            javaVersion = javaVersion.substring(2);
+        }
+        // drop qualifiers like "-ea", as they would make version lower than release
+        int dash = javaVersion.indexOf('-');
+        if (dash > 0) {
+            javaVersion = javaVersion.substring(0, dash);
+        }
+        return javaVersion;
     }
 }
